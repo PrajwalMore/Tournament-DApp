@@ -2,14 +2,9 @@
 pragma solidity 0.8.0;
 
 contract Tournament{
-
-
-    // add function for knowing ids .
-    // reward should not be greater than entryFee * participants.
-    // winner decide logic. 
     
     uint256 public idCntr=0;
-
+    
     struct tournamentInfo{
         uint startTime;
         uint endTime;
@@ -19,10 +14,8 @@ contract Tournament{
         address tournamentAdmin;
         address winnerAddress;
         uint256 noOfParticipants;
-        //address[] participantsAddress;
     }
-
-
+    
     mapping (uint256=>tournamentInfo) public tournament;
     
     mapping (uint256=>mapping(address=> bool)) public tournamentJoined;
