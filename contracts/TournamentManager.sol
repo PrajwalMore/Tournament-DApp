@@ -94,7 +94,7 @@ contract Tournament{
         return (success1,success2);
     }
     
-    
+    // Predictable random number generation. Using only for testing purpose.
     function decideWinner(uint256 _id) view private returns(address){
         address[] memory arr=participantsAddress[_id];
         
