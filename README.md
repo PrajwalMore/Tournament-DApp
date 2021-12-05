@@ -1,5 +1,5 @@
 # Tournament-DApp
-Tournament dApp provides functionality to:  
+Tournament dApp (only smart contracts for now!) provides functionality to:  
 1️⃣.create tournaments   
 2️⃣.user can join tournaments  
 3️⃣.Smart contract randomly chooses the tournament winner , tournament admin just needs to call function to choose winner.  
