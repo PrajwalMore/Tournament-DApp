@@ -1,27 +1,7 @@
 //SPDX-License-Identifier: MIT
-pragma solidity 0.8.0;
-import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
+pragma solidity 0.8.9;
 
-contract Tournament is VRFConsumerBase{
-    
-    bytes32 public keyHash;
-    uint256 public fee;
-    uint256 public randomResult;
-    
-    constructor() VRFConsumerBase(0xdD3782915140c8f3b190B5D67eAc6dc5760C46E9,0xa36085F69e2889c224210F603D836748e7dC0088){
-        keyHash=0x6c3699283bda56ad74f6b855546325b68d482e983852a7a82979cc4807b641f4;
-        fee=0.1 ether; //0.1 LINK
-    }
-    
-    function getRandomNumber() public returns (bytes32 requestId) {
-        require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK - fill contract with faucet");
-        return requestRandomness(keyHash, fee);
-    }
-    
-    function fulfillRandomness(bytes32 requestId,uint256 randomness) internal override{
-        randomResult= randomness;
-    }
-    
+contract Tournament{
     
     uint256 public idCntr=0;
     
@@ -34,6 +14,7 @@ contract Tournament is VRFConsumerBase{
         address tournamentAdmin;
         address winnerAddress;
         uint256 noOfParticipants;
+        bool iscancelled;
     }
     
     mapping (uint256=>tournamentInfo) public tournament;
@@ -43,10 +24,14 @@ contract Tournament is VRFConsumerBase{
     mapping (uint256=>address[]) participantsAddress;
     
     mapping(address=>uint256[]) addressToTournament;
+
+    mapping(uint256=>mapping(address=> bool)) public feeClaimed;
+
     
     event eventTournamentCreated(uint _startTime,uint _endTime,uint256 _entryFee,uint256 _noOfParticipants,uint256 rewardToAdmin,uint256 rewardToParticipant);
     event eventTournamentJoined(uint256 tournamentId,uint256 entryFee,address Participant);
     event eventRewardSent(uint256 tournamentId,address winnerAddress,uint256 rewardToWinner,uint256 rewardToAdmin);
+    event tournamentCancelled(uint256 tournamentId);
 
     //Creates tournament.
     //admin should add tournament reward to contract while calling function.
@@ -69,7 +54,8 @@ contract Tournament is VRFConsumerBase{
             rewardToAdmin,
             msg.sender, //as a admin.
             address(0),
-            _noOfParticipants
+            _noOfParticipants,
+            false
         );
         addressToTournament[msg.sender].push(idCntr);
         
@@ -115,25 +101,50 @@ contract Tournament is VRFConsumerBase{
     }
     
     // Predictable random number generation. Using only for testing purpose.
-    function decideWinner(uint256 _id) view private returns(address){
+    function decideWinner(uint256 _id) view public returns(address){
         address[] memory arr=participantsAddress[_id];
         
-        uint256 winner= uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp, arr)))/(arr.length) ;
+        uint256 winner= uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp, arr)))%(arr.length-1) ;
         
         return arr[winner];
     }
-    
-    
-    // Return fees to participated users in case there are no enough participants
-    // Callable only by tournament owner.
-    function returnFees(uint256 _id) external{
-        require(msg.sender == tournament[_id].tournamentAdmin,"ERR: YOU ARE NOT TOURNAMENT ADMIN TO OF THIS TOURNAMENT!");
-        require(block.timestamp <= tournament[_id].endTime,"ERR: TOURNAMENT ALREADY ENDED!");
+
+
+    // cancel tournament.
+    function cancelTournament(uint256 _id) external {
+        require(msg.sender == tournament[_id].tournamentAdmin,"ERR: YOU ARE NOT TOURNAMENT ADMIN TO CALL THIS FUNCTION!");
+        // add mapping for status.
         tournament[_id].endTime=block.timestamp;
-        for (uint256 i = 0; i < participantsAddress[_id].length; i++) {
-            payable(participantsAddress[_id][i]).call{value:tournament[_id].entryFee}("");
-        }
+        tournament[_id].iscancelled= true;
+        emit tournamentCancelled(_id);
+    }
+    
+    
+    // // Return fees to participated users in case there are no enough participants
+    // // Callable only by tournament owner.
+    // function returnFees(uint256 _id) external{
+    //     require(msg.sender == tournament[_id].tournamentAdmin,"ERR: YOU ARE NOT TOURNAMENT ADMIN TO OF THIS TOURNAMENT!");
+    //     require(block.timestamp <= tournament[_id].endTime,"ERR: TOURNAMENT ALREADY ENDED!");
+    //     tournament[_id].endTime=block.timestamp;
+    //     for (uint256 i = 0; i < participantsAddress[_id].length; i++) {
+    //         payable(participantsAddress[_id][i]).call{value:tournament[_id].entryFee}("");
+    //     }
         
+    // }
+
+    //claim tournament fee . only when tournament cancelled.
+    function claimTournamentFee(uint256 _id) external returns(bool){
+        // fee claimed or not
+        require(!feeClaimed[_id][msg.sender],"ERR: ALREADY CLAIMED!");
+        require(tournament[_id].iscancelled,"ERR: NOT CANCELLED YET!");
+        //check if id exist
+        require(_id <= idCntr,"ERR: TOURNAMENT DON'T EXISTS!");
+        //check if tournament cancelled.
+        require(block.timestamp >= tournament[_id].endTime,"ERR: TOURNAMENT NOT HAlTED BY ADMIN!");
+        require(tournamentJoined[_id][msg.sender] == true,"ERR: YOU'RE NOT A PARTICIPANT");
+        feeClaimed[_id][msg.sender]=true;
+        payable(msg.sender).transfer(tournament[_id].entryFee);
+        return true;
     }
 
     // Returns boolean value for tournament is active or not.
@@ -170,9 +181,6 @@ contract Tournament is VRFConsumerBase{
     function yourTournaments() view external returns(uint256[] memory){
         uint256[] memory arr=addressToTournament[msg.sender];
         return arr;
-        // if(arr.length==0){
-            
-        // }
     }
     
     
